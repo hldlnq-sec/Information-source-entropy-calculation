@@ -18,6 +18,12 @@ typedef struct
 
 } ContextFrequency;
 
+typedef struct
+{
+    size_t *block;
+    size_t count;
+} BlockFrequency;
+
 int entropy_from_counts(const size_t *counts, size_t alphabet_size, double *entropy);
 int max_entropy(size_t alphabet_size, double *result);
 

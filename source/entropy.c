@@ -1,5 +1,6 @@
 #include "../include/entropy.h"
 #include <math.h>
+#include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -343,6 +344,119 @@ cleanup:
     }
 
     free(contexts);
+
+    return -1;
+}
+
+int block_entropy(const size_t *sequence, size_t length, size_t order, double *result)
+{
+    if (sequence == NULL) return -1;
+    if (length == 0) return -1;
+    if (order >= length || order == 0) return -1;
+    if (result == NULL) return -1;
+
+    *result = 0.0;
+
+    BlockFrequency *blocks = NULL;
+    size_t block_count = 0;
+    size_t block_capacity = 0;
+
+    size_t total = length - order + 1;
+
+    for (size_t i = 0; i < total; i++)
+    {
+        size_t *new_block = malloc(order * sizeof(size_t));
+        if (new_block == NULL)
+        {
+            goto cleanup;
+        }
+        for (size_t j = 0; j < order; j++)
+        {
+            new_block[j] = sequence[i + j];
+        }
+        
+        size_t block_index = block_count;
+
+        for (size_t j = 0; j < block_count; j++)
+        {
+            if (memcmp(blocks[j].block, new_block, order * sizeof(size_t)) == 0)
+            {
+                block_index = j;
+                break;
+            }
+            
+            if (block_index < block_count)
+            {
+                blocks[block_index].count++;
+                free(new_block);
+            }
+            else 
+            {
+                if (block_count == block_capacity)
+                {
+                    size_t new_capacity = 0;
+                    if (block_capacity == 0) new_capacity = 4;
+                    else
+                    {
+                        if (block_capacity > SIZE_MAX / 2)
+                        {
+                            free(new_block);
+                            goto cleanup;
+                        }
+
+                        new_capacity = block_capacity * 2;
+
+                        if (new_capacity > SIZE_MAX / sizeof(BlockFrequency))
+                        {
+                            free(new_block);
+                            goto cleanup;
+                        }
+
+                        BlockFrequency *temp = realloc(blocks, new_capacity * sizeof(BlockFrequency));
+
+                        if (temp == NULL)
+                        {
+                            free(new_block);
+                            goto cleanup;
+                        }
+
+                        blocks = temp;
+                        block_capacity = new_capacity;
+                    }
+
+                    blocks[block_index].block = new_block;
+                    blocks[block_index].count = 1;
+
+                    block_count++;
+                }
+            }
+        }
+    }
+
+    double entropy = 0.0;
+
+    for (size_t i = 0; i < block_count; i++)
+    {
+        double probability = (double)blocks[i].count / (double)total;
+        entropy -= probability * log2(probability);
+    }
+
+    *result = entropy;
+
+    for (size_t i = 0; i < block_count; i++)
+    {
+        free(blocks[i].block);
+    }
+    free(blocks);
+
+    return 0;
+
+cleanup:
+    for (size_t i = 0; i < block_count; i++)
+    {
+        free(blocks[i].block);
+    }
+    free(blocks);
 
     return -1;
 }
